@@ -1,0 +1,33 @@
+#!/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RST='\033[0m'
+
+COLUMNS=3
+
+SERVICES=( ssh cron rsyslog )
+
+SERVICE_STATUS=()
+for SERVICE in "${SERVICES[@]}"; do
+    SERVICE_STATUS+=("$(systemctl is-active "$SERVICE")")
+done
+
+OUTPUT=""
+for i in "${!SERVICES[@]}"; do
+    if [[ "${SERVICE_STATUS[$i]}" == "active" ]]; then
+        OUTPUT+="${SERVICES[$i]}:,${GREEN}${SERVICE_STATUS[$i]}${RST},"
+    else
+        OUTPUT+="${SERVICES[$i]}:,${RED}${SERVICE_STATUS[$i]}${RST},"
+    fi
+    # Insert \n every $COLUMNS column
+    if [ $(((i+1) % COLUMNS)) -eq 0 ]; then
+        OUTPUT+="\n"
+    fi
+done
+OUTPUT+="\n"
+
+echo -e "  ${BLUE}================ Services ================${RST}"
+echo ""
+echo -e "$OUTPUT" | column -ts $',' | sed -e 's/^/  /'

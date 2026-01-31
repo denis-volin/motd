@@ -1,0 +1,48 @@
+#!/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+GREY='\033[2m'
+RST='\033[0m'
+
+WARN_USAGE=80
+CRIT_USAGE=90
+BAR_WIDTH=50
+
+mapfile -t FS_ARRAY < <(df -H -x zfs -x squashfs -x tmpfs -x devtmpfs -x overlay --output=target,pcent,size | tail -n+2)
+
+echo -e "  ${BLUE}============ Filesystem Usage ============${RST}"
+echo ""
+
+for FS in "${FS_ARRAY[@]}"; do
+    USAGE=$(echo "$FS" | awk '{print $2}' | sed 's/%//')
+    USED_WIDTH=$(((USAGE * BAR_WIDTH) / 100))
+
+    if [ "${USAGE}" -ge "${CRIT_USAGE}" ]; then
+        BAR_COLOR=$RED
+    elif [ "${USAGE}" -ge "${WARN_USAGE}" ]; then
+        BAR_COLOR=$YELLOW
+    else
+        BAR_COLOR=$GREEN
+    fi
+
+    BAR="[${BAR_COLOR}"
+    for (( i=0; i < USED_WIDTH; i++ )); do
+        BAR+="="
+    done
+
+    BAR+="${RST}${GREY}"
+
+    for (( i=USED_WIDTH; i < BAR_WIDTH; i++)); do
+        BAR+="="
+    done
+
+    BAR+="${RST}]"
+
+    echo "${FS}" | awk '{ printf("%-31s%+3s used out of %+4s\n", $1, $2, $3); }' | sed -e 's/^/  /'
+    echo -e "${BAR}" | sed -e 's/^/  /'
+done
+
+echo ""

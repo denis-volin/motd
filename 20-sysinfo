@@ -1,0 +1,83 @@
+#!/bin/bash
+
+BOLD='\033[1;37m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RST='\033[0m'
+
+DISTRO="$(cat /etc/*release | grep "PRETTY_NAME" | cut -d "=" -f 2- | sed 's/"//g')"
+
+# Print uptime in red, if it's < 1 day
+UPTIME_SEC="$(awk '{print int($1)}' /proc/uptime)"
+if [ "$UPTIME_SEC" -lt 86400 ]; then
+  UPTIME="${RED}$(uptime -p)${RST}"
+else
+  UPTIME="${GREEN}$(uptime -p)${RST}"
+fi
+
+# Print load average in red, if it's > 1.5 of processing units
+read -r LOAD1 LOAD5 LOAD15 _ < /proc/loadavg
+read -r LOAD10 LOAD50 LOAD150 <<< "$(cat /proc/loadavg | awk '{ printf "%.0f %.0f %.0f", $1 * 10,$2 * 10,$3 * 10 }')"
+LOAD_TRESHOLD="$(( $(nproc) * 15 ))"
+if [ "$LOAD10" -gt "$LOAD_TRESHOLD" ]; then
+  LOAD1="${RED}$LOAD1${RST}"
+else
+  LOAD1="${GREEN}$LOAD1${RST}"
+fi
+if [ "$LOAD50" -gt "$LOAD_TRESHOLD" ]; then
+  LOAD5="${RED}$LOAD5${RST}"
+else
+  LOAD5="${GREEN}$LOAD5${RST}"
+fi
+if [ "$LOAD150" -gt "$LOAD_TRESHOLD" ]; then
+  LOAD15="${RED}$LOAD15${RST}"
+else
+  LOAD15="${GREEN}$LOAD15${RST}"
+fi
+
+PROCESS=$(ps -eo user=|sort|uniq -c | awk '{ print $2 " " $1 }')
+PROCESS_ROOT=$(echo "$PROCESS"| grep root | awk '{print $2}')
+PROCESS_USER="$(echo "$PROCESS"| grep -v root | awk '{print $2}' | awk '{ SUM += $1} END { print SUM }')"
+PROCESS_ALL="$(echo "$PROCESS"| awk '{print $2}' | awk '{ SUM += $1} END { print SUM }')"
+
+# Print total CPU utilization in red if it's > 75, or in yellow if it's > 50
+read -r CPU_USER CPU_NICE CPU_SYSTEM CPU_IDLE CPU_IOWAIT CPU_IRQ CPU_SOFTIRQ CPU_STEAL <<< "$(cat /proc/stat | head -n 1 | awk '{ print $2,$3,$4,$5,$6,$7,$8,$9 }')" # CPU Utilization
+CPU_SUM=$((CPU_USER + CPU_NICE + CPU_SYSTEM + CPU_IDLE + CPU_IOWAIT + CPU_IRQ + CPU_SOFTIRQ + CPU_STEAL))
+CPU_IO=$((CPU_IDLE + CPU_IOWAIT))
+CPU_UTIL=$((100 - (CPU_IO * 100) / CPU_SUM))
+if [ "$CPU_UTIL" -gt 75 ]; then
+  CPU_UTIL="${RED}$CPU_UTIL${RST}"
+elif [ "$CPU_UTIL" -gt 50 ]; then
+  CPU_UTIL="${YELLOW}$CPU_UTIL${RST}"
+else
+  CPU_UTIL="${GREEN}$CPU_UTIL${RST}"
+fi
+
+# Print memory utilization in red if it's > 80, or in yellow if it's > 60
+read -r HMEM_USED HMEM_AVAIL HMEM_TOTAL <<< "$(free -h | grep "Mem" | awk '{print $3,$7,$2}')"
+read -r MEM_USED MEM_TOTAL <<< "$(free | grep "Mem" | awk '{print $3,$2}')"
+PMEM_USED=$(((MEM_USED * 100) / MEM_TOTAL))
+if [ "$PMEM_USED" -gt 80 ]; then
+  MEMORY="${RED}$HMEM_USED${RST} (used), ${RED}$HMEM_AVAIL${RST} (avail)"
+elif [ "$PMEM_USED" -gt 60 ]; then
+  MEMORY="${YELLOW}$HMEM_USED${RST} (used), ${YELLOW}$HMEM_AVAIL${RST} (avail)"
+else
+  MEMORY="${GREEN}$HMEM_USED${RST} (used), ${GREEN}$HMEM_AVAIL${RST} (avail)"
+fi
+
+
+echo -e "  ${BLUE}=========== System Information ===========${RST}"
+echo -e "
+  ${BOLD}Hostname (FQDN)     ${RST}: ${BLUE}$(hostname --fqdn)${RST}
+  ${BOLD}Distro              ${RST}: $DISTRO
+  ${BOLD}Kernel              ${RST}: $(uname -sr)
+
+  ${BOLD}Uptime              ${RST}: $UPTIME (since $(uptime -s))
+  ${BOLD}Load Average        ${RST}: $LOAD1 (1m), $LOAD5 (5m), $LOAD15 (15m) | ${BLUE}$(nproc)${RST} threads
+  ${BOLD}Processes           ${RST}: ${BLUE}$PROCESS_ROOT${RST} (root), ${BLUE}$PROCESS_USER${RST} (user), ${BLUE}$PROCESS_ALL${RST} (total)
+
+  ${BOLD}CPU Utilization     ${RST}: $CPU_UTIL (total), ${BLUE}$((CPU_USER * 100 / CPU_SUM))${RST} (user), ${BLUE}$((CPU_SYSTEM * 100 / CPU_SUM))${RST} (system), ${BLUE}$((CPU_NICE * 100 / CPU_SUM))${RST} (nice), ${BLUE}$((CPU_IDLE * 100 / CPU_SUM))${RST} (idle), ${BLUE}$((CPU_IOWAIT * 100 / CPU_SUM))${RST} (iowait)
+  ${BOLD}Memory Utilization  ${RST}: $MEMORY, ${BLUE}$HMEM_TOTAL${RST} (total)
+"
