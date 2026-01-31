@@ -16,6 +16,6 @@ Inspired by [yboetz/motd](https://github.com/yboetz/motd) GitHub repo.
 - 21-filesystems
   - Prints usage in yellow if it's > 80, or in red if it's > 90
 - 22-services
-  - Prints name of the service in red if it's not running
+  - Prints status of the service in red if it's not running
 
 ![Screenshot](screenshot.png)
